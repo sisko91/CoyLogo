@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33829.357
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoyLogo", "CoyLogo.csproj", "{39AA9019-C2F5-4D8D-BB23-6698F6329919}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{39AA9019-C2F5-4D8D-BB23-6698F6329919}.Debug|x64.ActiveCfg = Debug|x64
+		{39AA9019-C2F5-4D8D-BB23-6698F6329919}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2067BC50-52F9-467D-BF1D-A8226D05CC26}
+	EndGlobalSection
+EndGlobal
