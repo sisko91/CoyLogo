@@ -23,6 +23,13 @@ namespace IngameScript {
 
         public void Main(string argument, UpdateType updateSource) {
             foreach (var coyLogo in coyLogos) {
+                if (argument == "reset") {
+                    coyLogo.Reset();
+                }
+
+                if (argument.StartsWith("animate")) {
+                    coyLogo.SetAnimate(argument.EndsWith("-r"));
+                }
                 coyLogo.Update(argument);
             }
         }
@@ -33,17 +40,15 @@ namespace IngameScript {
             List<SpriteGroup> logoPieces;
             IMyTextPanel drawingSurface;
             private float yOffset;
-
             int groupIndex = 0;
+
             bool animate = false;
-
             bool reverse = false;
-            int updateFrame = 0;
-            int runFrame = 0;
-            int frameRate = 1;
 
-            int lastSpriteStartStep = 0;
-
+            int ticks = 0;
+            int step = 0;
+            int updateFrequency = 1;
+            int lastStartStep = 0;
             Dictionary<int, int> alphaDict = new Dictionary<int, int>();
 
             public CoyLogo(IMyTextPanel drawingSurface) {
@@ -196,75 +201,44 @@ namespace IngameScript {
             }
 
             public void Update(string argument) {
-                //program.Echo("Running...");
-                if (argument == "reset") {
-                    var frameClr = drawingSurface.DrawFrame();
-                    frameClr.Dispose();
-                    animate = false;
-                    reverse = false;
-                    groupIndex = 0;
-                    alphaDict.Clear();
-                }
-
-                if (argument.StartsWith("animate")) {
-                    reverse = false;
-                    if (argument.EndsWith("-r")) {
-                        reverse = true;
-                    }
-
-                    updateFrame = 0;
-                    lastSpriteStartStep = 0;
-                    runFrame = 0;
-                    animate = true;
-
-                    if (!reverse && !alphaDict.ContainsKey(0)) {
-                        alphaDict.Add(0, 0);
-                    }
-                }
-
                 if (!animate) {
-                    //program.Echo("Not animating");
                     return;
-                }
-
-                if (reverse) {
-                    //program.Echo("animating (reverse)");
-                } else {
-                    //program.Echo("animating");
                 }
 
                 //Hack to force screen redraw for high frame rate
                 drawingSurface.ContentType = ContentType.TEXT_AND_IMAGE;
                 drawingSurface.ContentType = ContentType.SCRIPT;
 
-                runFrame += 1;
+                ticks += 1;
 
-                if (runFrame % frameRate == 0) {
-                    updateFrame += 1;
+                if (ticks % updateFrequency == 0) {
+                    step += 1;
                 } else {
                     return;
                 }
 
-                int nextStep = groupIndex == logoPieces.Count - 1 ? 2 : logoPieces[groupIndex + 1].offset;
-                if (reverse) {
-                    nextStep = groupIndex == 0 ? 2 : logoPieces[groupIndex].offset;
+                //Check if the next group of sprites should begin animating
+                int nextStep = -1;
+                if (reverse && groupIndex != 0) {
+                    nextStep = logoPieces[groupIndex].offset;
+                } else if (!reverse && groupIndex < logoPieces.Count - 1) {
+                    nextStep = logoPieces[groupIndex + 1].offset;
                 }
 
-                if (updateFrame - lastSpriteStartStep == nextStep && runFrame % frameRate == 0) {
-                    lastSpriteStartStep = updateFrame;
-                    groupIndex = reverse ? Math.Max(0, groupIndex - 1) : Math.Min(logoPieces.Count - 1, groupIndex + 1);
+                if (step - lastStartStep == nextStep && ticks % updateFrequency == 0) {
+                    lastStartStep = step;
+                    groupIndex = reverse ? groupIndex - 1 : groupIndex + 1;
 
                     if (!alphaDict.ContainsKey(groupIndex) && !reverse) {
                         alphaDict.Add(groupIndex, 0);
                     }
                 }
 
-                if (groupIndex == logoPieces.Count - 1 && !reverse) {
-                    if (alphaDict[groupIndex] == 255) {
-                        animate = false;
-                        reverse = true;
-                        return;
-                    }
+                //Check if the animation is finished and all pieces are faded in/out
+                if (groupIndex == logoPieces.Count - 1 && alphaDict[groupIndex] == 255 && !reverse) {
+                    animate = false;
+                    reverse = true;
+                    return;
                 }
 
                 if (groupIndex == 0 && alphaDict.Count == 0 && reverse) {
@@ -273,47 +247,77 @@ namespace IngameScript {
                     return;
                 }
 
-                var frame = drawingSurface.DrawFrame();
-
+                //Draw stuff
                 if (reverse) {
-                    for (int i = logoPieces.Count - 1; i >= 0; i--) {
-                        if (!alphaDict.ContainsKey(i)) {
-                            continue;
-                        }
-
-                        var sprites = logoPieces[i];
-                        var newAlpha = 255;
-                        if (i >= groupIndex) {
-                            newAlpha = Math.Max(0, alphaDict[i] - (int)Math.Ceiling(255 / (double)sprites.steps));
-                            alphaDict[i] = newAlpha;
-                        }
-
-                        if (newAlpha == 0) {
-                            alphaDict.Remove(i);
-                            continue;
-                        }
-
-                        for (int j = 0; j < sprites.sprites.Count; j++) {
-                            var sprite = sprites.sprites[j];
-                            sprite.Color = newAlpha == 255 ? Color.White : new Color(100, 100, 100, newAlpha);
-
-                            frame.Add(sprite);
-                        }
-                    }
-
-                    frame.Dispose();
-                    return;
+                    AnimateReverse();
+                } else {
+                    Animate();
                 }
+            }
 
+            public void SetAnimate(bool reverse=false) {
+                this.reverse = reverse;
+
+                step = 0;
+                lastStartStep = 0;
+                ticks = 0;
+                animate = true;
+
+                if (!reverse && !alphaDict.ContainsKey(0)) {
+                    alphaDict.Add(0, 0);
+                }
+            }
+
+            public void Reset() {
+                var frameClr = drawingSurface.DrawFrame();
+                frameClr.Dispose();
+                animate = false;
+                reverse = false;
+                groupIndex = 0;
+                alphaDict.Clear();
+            }
+
+            private void Animate() {
+                var frame = drawingSurface.DrawFrame();
                 for (int i = 0; i <= groupIndex; i++) {
-                    var sprites = logoPieces[i];
+                    var spriteGroup = logoPieces[i];
 
-                    var newAlpha = Math.Min(255, alphaDict[i] + (int)Math.Ceiling(255 / (double)sprites.steps));
+                    var newAlpha = Math.Min(255, alphaDict[i] + (int)Math.Ceiling(255 / (double)spriteGroup.steps));
                     alphaDict[i] = newAlpha;
 
-                    for (int j = 0; j < sprites.sprites.Count; j++) {
-                        var sprite = sprites.sprites[j];
+                    for (int j = 0; j < spriteGroup.sprites.Count; j++) {
+                        var sprite = spriteGroup.sprites[j];
                         sprite.Color = newAlpha == 255 ? Color.White : new Color(100, 100, 100, newAlpha);
+                        frame.Add(sprite);
+                    }
+                }
+
+                frame.Dispose();
+            }
+
+            private void AnimateReverse() {
+                var frame = drawingSurface.DrawFrame();
+                for (int i = logoPieces.Count - 1; i >= 0; i--) {
+                    if (!alphaDict.ContainsKey(i)) {
+                        continue;
+                    }
+
+                    var spriteGroup = logoPieces[i];
+                    var newAlpha = 255;
+                    if (i >= groupIndex) {
+                        newAlpha = Math.Max(0, alphaDict[i] - (int)Math.Ceiling(255 / (double)spriteGroup.steps));
+                        alphaDict[i] = newAlpha;
+                    }
+
+                    if (newAlpha == 0) {
+                        alphaDict.Remove(i);
+                        continue;
+                    }
+
+                    for (int j = 0; j < spriteGroup.sprites.Count; j++) {
+                        var sprite = spriteGroup.sprites[j];
+                        sprite.Color = newAlpha == 255 ? Color.White : new Color(100, 100, 100, newAlpha);
+
                         frame.Add(sprite);
                     }
                 }
@@ -330,8 +334,8 @@ namespace IngameScript {
 
         public class SpriteGroup {
             public List<MySprite> sprites;
-            public int steps; //how many frames to fade in
-            public int offset; //frames to wait to start animating after previous sprite group
+            public int steps; //how many steps to fade in
+            public int offset; //steps to wait to start animating after previous sprite group
             public SpriteGroup(List<MySprite> sprites, int steps = 4, int offset = 2) {
                 this.sprites = sprites;
                 this.steps = steps;
